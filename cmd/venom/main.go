@@ -5,9 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/KaiqueGovani/venom/internal/model"
 	"github.com/couchbase/gocb/v2"
-	"github.com/google/uuid"
 )
 
 func main() {
@@ -42,31 +40,26 @@ func main() {
 	// Get a reference to the default collection, required for older Couchbase server versions
 	// col := bucket.DefaultCollection()
 
-	projects := bucket.Scope("mindsnap").Collection("projects")
-
-    insertId := uuid.New().String()
-
-	_, err = projects.Upsert(insertId,
-		model.Project{
-			Name:         "MindSnap Frontend",
-			FileName:     ".env.production.local",
-			TargetFolder: "/frontend",
-			Variables:    map[string]string{},
-		}, nil)
+	results, err := cluster.Query("SELECT * FROM venom.mindsnap.projects", &gocb.QueryOptions{
+		// Note that we set Adhoc to true to prevent this query being run as a prepared statement.
+		Adhoc: true,
+	})
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
 
-	// Get the document back
-	getResult, err := projects.Get(insertId, nil)
-	if err != nil {
-		log.Fatal(err)
+	var greeting interface{}
+	for results.Next() {
+		err := results.Row(&greeting)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Println(greeting)
 	}
 
-	var project model.Project
-	err = getResult.Content(&project)
+	// always check for errors after iterating
+	err = results.Err()
 	if err != nil {
-		log.Fatal(err)
+		panic(err)
 	}
-	fmt.Printf("Project: %v\n", project)
 }
