@@ -16,6 +16,8 @@ github.com/charmbracelet/x/term v0.2.0 h1:cNB9Ot9q8I711MyZ7myUR5HFWL/lc3OpU8jZ4h
 github.com/charmbracelet/x/term v0.2.0/go.mod h1:GVxgxAbjUrmpvIINHIQnJJKpMlHiZ4cktEQCN6GWyF0=
 github.com/client9/misspell v0.3.4/go.mod h1:qj6jICC3Q7zFZvVWo7KLAzC3yx5G7kyvSDkc90ppPyw=
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
+github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be h1:J5BL2kskAlV9ckgEsNQXscjIaLiOYiZ75d4e94E6dcQ=
+github.com/common-nighthawk/go-figure v0.0.0-20210622060536-734e95fb86be/go.mod h1:mk5IQ+Y0ZeO87b858TlA645sVcEcbiX6YqP98kt+7+w=
 github.com/couchbase/gocb/v2 v2.9.2 h1:g8VbSuBhY/iKWs6SIOSwoXYdv89D0THTSQQtsSC7J+4=
 github.com/couchbase/gocb/v2 v2.9.2/go.mod h1:nCHmyzEiB5FmAzuNNkXtSbXP7wxO7nsYKdQAzm2TvSA=
 github.com/couchbase/gocbcore/v10 v10.5.2 h1:DHK042E1RfhPBR3b14CITl5XHRsLjH3hpERuwUc5UIg=
