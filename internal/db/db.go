@@ -1,11 +1,25 @@
 package db
 
 import (
+	"os"
+
 	"github.com/couchbase/gocb/v2"
+	"github.com/joho/godotenv"
 )
+
 
 func Connect() (*gocb.Cluster, error) {
 	// Update this to your cluster details
+	
+	// Load .env file
+	err := godotenv.Load()
+	if err != nil {
+		return nil, err
+	}
+
+	connectionString := os.Getenv("COUCHBASE_CONNECTION_STRING")
+	username := os.Getenv("COUCHBASE_USERNAME")
+	password := os.Getenv("COUCHBASE_PASSWORD")
 
 	options := gocb.ClusterOptions{
 		Authenticator: gocb.PasswordAuthenticator{
