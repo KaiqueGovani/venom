@@ -24,6 +24,11 @@ type ApiHandler struct {
 	ProjectsCollection *gocb.Collection
 }
 
+type GetProjectsResult struct {
+	ID      string        `json:"id"`
+	Project model.Project `json:"projects"`
+}
+
 func NewApiHandler(bucket string, scope string, collection string, cluster *gocb.Cluster, projectsCollection *gocb.Collection) ApiHandler {
 	return ApiHandler{
 		Bucket:             bucket,
@@ -47,11 +52,11 @@ func (a ApiHandler) GetProjects() (map[string]model.Project, error) {
 	}
 
 	projects := make(map[string]model.Project)
-	var result struct {
-		ID      string        `json:"id"`
-		Project model.Project `json:"projects"`
-	}
+	var result GetProjectsResult
 	for results.Next() {
+		// Clear the result struct
+		result = GetProjectsResult{}
+
 		err := results.Row(&result)
 		if err != nil {
 			return nil, err
