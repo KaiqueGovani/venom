@@ -10,7 +10,7 @@ import (
 
 func Connect() (*gocb.Cluster, error) {
 	// Update this to your cluster details
-	
+
 	// Load .env file
 	err := godotenv.Load()
 	if err != nil {
