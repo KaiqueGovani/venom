@@ -1,14 +1,12 @@
 package main
 
 import (
-	"encoding/json"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/KaiqueGovani/venom/internal/api"
 	"github.com/KaiqueGovani/venom/internal/db"
-	"github.com/KaiqueGovani/venom/internal/model"
 	"github.com/couchbase/gocb/v2"
 )
 
@@ -34,62 +32,10 @@ func main() {
 
 	a := api.NewApiHandler(bucketName, scopeName, collectionName, cluster, col)
 
-	// Get all projects
-	projects, _ := a.GetProjects()
-	fmt.Println(projects)
-
-	projectsJSON, err := json.MarshalIndent(projects, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(projectsJSON))
-
-	// Get a single project
-	project, _ := a.GetProject("7798d7a7-0d4d-4c38-b637-781e29fb0344")
-
-	projectJSON, err := json.MarshalIndent(project, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(projectJSON))
-
-	// Create a new project
-	newProject := model.Project{
-		Name:         "New Project",
-		FileName:     "new_project",
-		TargetFolder: "new_project",
-		Variables:    map[string]string{"key": "value"},
-	}
-
-	createdId, err := a.CreateProject(newProject)
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println("Created ID:", createdId)
-
-	// Update the project
-	updatedProject := model.Project{
-		Name:         "Updated Project",
-		FileName:     "updated_project",
-		TargetFolder: "updated_project",
-		Variables:    map[string]string{"key": "value"},
-	}
-
-	updated, err := a.UpdateProject(createdId, updatedProject)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	updatedJSON, err := json.MarshalIndent(updated, "", "  ")
-	if err != nil {
-		log.Fatal(err)
-	}
-	fmt.Println(string(updatedJSON))
-
 	// Delete the project
-	err = a.DeleteProject(createdId)
+	err = a.DeleteProject("Testando")
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Println("Deleted project with ID:", createdId)
+	fmt.Println("Deleted project with ID:", "Testando")
 }
