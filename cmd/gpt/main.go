@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -24,9 +23,31 @@ const (
 	collectionName = "projects"
 )
 
+// #region Styles
 var baseStyle = lipgloss.NewStyle().
 	BorderStyle(lipgloss.NormalBorder()).
 	BorderForeground(lipgloss.Color("240"))
+
+func styleTable(t *table.Model) {
+	s := table.DefaultStyles()
+	s.Header = s.Header.
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderForeground(lipgloss.Color("240")).
+		BorderBottom(true).
+		Bold(true)
+	s.Selected = s.Selected.
+		Foreground(lipgloss.Color("229")).
+		Background(lipgloss.Color("57")).
+		Bold(false)
+	t.SetStyles(s)
+
+	t.Help.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
+		Light: "#909090",
+		Dark:  "#f0f0f0",
+	})
+
+	t.Help.ShowAll = false
+}
 
 // #region State
 type State int
@@ -34,7 +55,7 @@ type State int
 const (
 	ProjectsList State = iota
 	ProjectForm
-	VariablesForm
+	VariablesList
 	Loading
 )
 
@@ -46,10 +67,10 @@ type model struct {
 	customKeyMap    CustomKeyMap
 	projects        map[string]mod.Project
 	selectedProject mod.Project
-	apiHandler      *api.ApiHandler
 	form            *huh.Form
-	styles          *Styles
 	spinner         spinner.Model
+	apiHandler      *api.ApiHandler
+	cluster         *gocb.Cluster
 }
 
 // #region KeyMap
@@ -90,8 +111,8 @@ var customKeyMap = CustomKeyMap{
 		key.WithHelp("d", "delete ❌"),
 	),
 	Create: key.NewBinding(
-		key.WithKeys("n"),
-		key.WithHelp("n", "new ➕"),
+		key.WithKeys("a"),
+		key.WithHelp("a", "add ➕"),
 	),
 	LineUp: key.NewBinding(
 		key.WithKeys("up", "k"),
@@ -123,27 +144,10 @@ func createProjectsTable() table.Model {
 	t := table.New(
 		table.WithColumns(columns),
 		table.WithFocused(true),
-		table.WithHeight(4),
+		table.WithHeight(6),
 	)
 
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
-	t.SetStyles(s)
-
-	t.Help.Styles.ShortKey = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{
-		Light: "#909090",
-		Dark:  "#f0f0f0",
-	})
-
-	t.Help.ShowAll = false
+	styleTable(&t)
 
 	return t
 }
@@ -162,6 +166,39 @@ func createProjectForm(project *mod.Project) *huh.Form {
 	return form
 }
 
+// #region VariablesTable
+// Helper function to display the variables table
+func (m *model) showVariablesTable() tea.Cmd {
+	// Set the state to VariablesForm
+	m.state = VariablesList
+
+	// Disable the help for variable key
+	m.customKeyMap.Configure.SetEnabled(false)
+
+	// Create a table of variables (key-value pairs)
+	var variableRows []table.Row
+	for key, value := range m.selectedProject.Variables {
+		variableRows = append(variableRows, table.Row{key, value})
+	}
+
+	// Define the columns for the variables table
+	columns := []table.Column{
+		{Title: "Key", Width: 30},
+		{Title: "Value", Width: 44},
+	}
+
+	// Create the table
+	m.varTable = table.New(
+		table.WithColumns(columns),
+		table.WithRows(variableRows),
+		table.WithFocused(true),
+		table.WithHeight(6),
+	)
+	styleTable(&m.varTable)
+
+	return nil
+}
+
 func NewStyles(lg *lipgloss.Renderer) *Styles {
 	s := &Styles{}
 	s.Base = lg.NewStyle().Padding(1, 4, 0, 1)
@@ -173,6 +210,7 @@ type Styles struct {
 }
 
 // #region Commands
+type Message struct{}
 type Success struct{}
 
 func (m *model) SetLoading() tea.Cmd {
@@ -180,25 +218,31 @@ func (m *model) SetLoading() tea.Cmd {
 	return m.spinner.Tick
 }
 
-type GetProjectsMsg struct{}
-
-func (m *model) GetProjects() tea.Cmd {
+func (m *model) GetApiHandler() tea.Cmd {
 	return func() tea.Msg {
 		cluster, err := db.Connect()
 		if err != nil {
-			log.Fatal(err)
+			panic(err)
 		}
-		defer cluster.Close(&gocb.ClusterCloseOptions{})
+		m.cluster = cluster
 
 		// Get the bucket
-		bucket := cluster.Bucket(bucketName)
+		bucket := m.cluster.Bucket(bucketName)
 		bucket.WaitUntilReady(5*time.Second, nil)
 
 		// Get the collection
 		col := cluster.Bucket(bucketName).Scope(scopeName).Collection(collectionName)
 
 		m.apiHandler = api.NewApiHandler(bucketName, scopeName, collectionName, cluster, col)
+		return Message{}
+	}
 
+}
+
+type GetProjectsMsg struct{}
+
+func (m *model) GetProjects() tea.Cmd {
+	return func() tea.Msg {
 		// Get all projects
 		projects, _ := m.apiHandler.GetProjects()
 
@@ -241,7 +285,7 @@ func (m *model) SelectProject() tea.Cmd {
 // #region Init
 func (m *model) Init() tea.Cmd {
 	//TODO: INITIATE WITH A NICE MESSAGE/LOGO
-	return tea.Batch(m.spinner.Tick, m.GetProjects())
+	return tea.Batch(m.spinner.Tick, tea.Sequence(m.GetApiHandler(), m.GetProjects()))
 }
 
 // #region Update
@@ -251,8 +295,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProjectsList(msg)
 	case ProjectForm:
 		return m.updateProjectForm(msg)
-	case VariablesForm:
-		return m.updateVariablesForm(msg)
+	case VariablesList:
+		return m.updateVariablesList(msg)
 	case Loading:
 		return m.updateLoading(msg)
 	}
@@ -260,6 +304,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// #region UpdateLoading
 func (m *model) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -276,6 +321,7 @@ func (m *model) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// #region UpdateProjectsList
 func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 	switch msg := msg.(type) {
@@ -298,6 +344,7 @@ func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// #region UpdateProjectForm
 func (m *model) updateProjectForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
@@ -327,19 +374,21 @@ func (m *model) updateProjectForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
-func (m *model) updateVariablesForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+// #region UpdateVariables
+func (m *model) updateVariablesList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc", "q":
+		switch {
+		case key.Matches(msg, m.customKeyMap.Quit):
 			m.state = ProjectsList
+			m.customKeyMap.Configure.SetEnabled(true)
 			return m, nil
-		case "a":
+		case key.Matches(msg, m.customKeyMap.Create):
 			// Add a new key-value pair
 			m.selectedProject.Variables["new_key"] = "new_value"
 
 			return nil, m.showVariablesTable()
-		case "d":
+		case key.Matches(msg, m.customKeyMap.Delete):
 			// Delete the selected variable
 			selectedRow := m.varTable.SelectedRow()
 			delete(m.selectedProject.Variables, selectedRow[0])
@@ -352,46 +401,6 @@ func (m *model) updateVariablesForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// Helper function to display the variables table
-func (m *model) showVariablesTable() tea.Cmd {
-	// Set the state to VariablesForm
-	m.state = VariablesForm
-
-	// Create a table of variables (key-value pairs)
-	var variableRows []table.Row
-	for key, value := range m.selectedProject.Variables {
-		variableRows = append(variableRows, table.Row{key, value})
-	}
-
-	// Define the columns for the variables table
-	columns := []table.Column{
-		{Title: "Key", Width: 20},
-		{Title: "Value", Width: 40},
-	}
-
-	// Create the table
-	m.varTable = table.New(
-		table.WithColumns(columns),
-		table.WithRows(variableRows),
-		table.WithFocused(true),
-		table.WithHeight(8),
-	)
-
-	s := table.DefaultStyles()
-	s.Header = s.Header.
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderForeground(lipgloss.Color("240")).
-		BorderBottom(true).
-		Bold(true)
-	s.Selected = s.Selected.
-		Foreground(lipgloss.Color("229")).
-		Background(lipgloss.Color("57")).
-		Bold(false)
-	m.varTable.SetStyles(s)
-
-	return nil
-}
-
 // #region View
 func (m model) View() string {
 	switch m.state {
@@ -400,8 +409,10 @@ func (m model) View() string {
 		s += "\n" + m.table.Help.View(m.customKeyMap)
 		return s
 
-	case VariablesForm:
-		return m.styles.Base.Render(m.varTable.View()) + "\nPress 'a' to add, 'd' to delete, 'esc' to go back."
+	case VariablesList:
+		s := baseStyle.Render(m.varTable.View()) + "\n"
+		s += "\n" + m.table.Help.View(m.customKeyMap)
+		return s
 
 	case Loading:
 		return fmt.Sprintf("\n %s%s\n\n", m.spinner.View(), "Loading...")
@@ -416,19 +427,22 @@ func main() {
 	// Starts the TUI application
 	t := createProjectsTable()
 
-	styles := NewStyles(lipgloss.DefaultRenderer())
-
 	spinner := spinner.New(
 		spinner.WithSpinner(spinner.Dot),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("57"))),
 	)
 	spinner.Tick()
 
-	m := model{Loading, t, table.Model{}, customKeyMap, map[string]mod.Project{}, mod.Project{}, &api.ApiHandler{}, nil, styles, spinner}
+	m := model{Loading, t, table.Model{}, customKeyMap, map[string]mod.Project{}, mod.Project{}, nil, spinner, &api.ApiHandler{}, nil}
 
 	if _, err := tea.NewProgram(&m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
 		os.Exit(1)
 	}
+
+	if m.cluster != nil {
+		m.cluster.Close(&gocb.ClusterCloseOptions{})
+	}
+
 	println("Venom says: 'Goodbye, and remember, with great power comes great responsibility!'")
 }

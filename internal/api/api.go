@@ -76,7 +76,7 @@ func (a ApiHandler) GetProjects() (map[string]model.Project, error) {
 
 func (a ApiHandler) GetProject(projectName string) (model.Project, error) {
 	var project model.Project
-
+	fmt.Print(projectName)
 	result, err := a.ProjectsCollection.Get(projectName, &gocb.GetOptions{})
 	if err != nil {
 		return project, err
