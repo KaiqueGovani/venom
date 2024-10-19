@@ -5,15 +5,14 @@ import (
 
 	"github.com/KaiqueGovani/venom/internal/model"
 	"github.com/couchbase/gocb/v2"
-	"github.com/google/uuid"
 )
 
 type API interface {
 	GetProjects() (map[string]model.Project, error)
-	GetProject(id string) (model.Project, error)
+	GetProject(projectName string) (model.Project, error)
 	CreateProject(project model.Project) (model.Project, error)
-	UpdateProject(id string, project model.Project) (model.Project, error)
-	DeleteProject(id string) error
+	UpdateProject(projectName string, project model.Project) (model.Project, error)
+	DeleteProject(projectName string) error
 }
 
 type ApiHandler struct {
@@ -29,8 +28,8 @@ type GetProjectsResult struct {
 	Project model.Project `json:"projects"`
 }
 
-func NewApiHandler(bucket string, scope string, collection string, cluster *gocb.Cluster, projectsCollection *gocb.Collection) ApiHandler {
-	return ApiHandler{
+func NewApiHandler(bucket string, scope string, collection string, cluster *gocb.Cluster, projectsCollection *gocb.Collection) *ApiHandler {
+	return &ApiHandler{
 		Bucket:             bucket,
 		Scope:              scope,
 		Collection:         collection,
@@ -75,10 +74,10 @@ func (a ApiHandler) GetProjects() (map[string]model.Project, error) {
 	return projects, nil
 }
 
-func (a ApiHandler) GetProject(id string) (model.Project, error) {
+func (a ApiHandler) GetProject(projectName string) (model.Project, error) {
 	var project model.Project
 
-	result, err := a.ProjectsCollection.Get(id, &gocb.GetOptions{})
+	result, err := a.ProjectsCollection.Get(projectName, &gocb.GetOptions{})
 	if err != nil {
 		return project, err
 	}
@@ -91,7 +90,7 @@ func (a ApiHandler) GetProject(id string) (model.Project, error) {
 }
 
 func (a ApiHandler) CreateProject(project model.Project) (string, error) {
-	key := uuid.New().String()
+	key := project.Name
 	_, err := a.ProjectsCollection.Upsert(key, project, nil)
 	if err != nil {
 		return "", err
@@ -99,16 +98,16 @@ func (a ApiHandler) CreateProject(project model.Project) (string, error) {
 	return key, nil
 }
 
-func (a ApiHandler) UpdateProject(id string, project model.Project) (model.Project, error) {
-	_, err := a.ProjectsCollection.Upsert(id, project, nil)
+func (a ApiHandler) UpdateProject(projectName string, project model.Project) (model.Project, error) {
+	_, err := a.ProjectsCollection.Upsert(projectName, project, nil)
 	if err != nil {
 		return project, err
 	}
 	return project, nil
 }
 
-func (a ApiHandler) DeleteProject(id string) error {
-	_, err := a.ProjectsCollection.Remove(id, nil)
+func (a ApiHandler) DeleteProject(projectName string) error {
+	_, err := a.ProjectsCollection.Remove(projectName, nil)
 	if err != nil {
 		return err
 	}
