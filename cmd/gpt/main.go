@@ -321,21 +321,25 @@ func (m *model) GetProjects() tea.Cmd {
 	}
 }
 
+//TODO: REFACTOR THIS, REMOVE SELECT PROJECT AND JUST GET THE PROJECT FROM THE TABLE
 func (m *model) SelectProject() tea.Cmd {
-	projectName := m.table.SelectedRow()[0]
+	return tea.Sequence(
+		func() tea.Msg {
+			projectName := m.table.SelectedRow()[0]
 
-	project, err := m.apiHandler.GetProject(projectName)
-	if err != nil {
-		panic(err)
-	}
+			project, err := m.apiHandler.GetProject(projectName)
+			if err != nil {
+				panic(err)
+			}
 
-	*m.selectedProject = project
-	m.state = EditProjectForm
+			*m.selectedProject = project
+			m.state = EditProjectForm
 
-	// Create a form to edit the project details
-	m.form = createProjectForm(&project, false)
-
-	return m.form.Init()
+			// Create a form to edit the project details
+			m.form = createProjectForm(&project, false)
+			return Message{}
+		},
+		m.form.Init())
 }
 
 func (m *model) CreateProject() tea.Cmd {
@@ -429,11 +433,13 @@ func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
+			//TODO: ADD THE PULL COMMAND
 		case key.Matches(msg, m.customKeyMap.Quit):
 			return m, tea.Quit
 		case key.Matches(msg, m.customKeyMap.Edit):
 			return m, m.SelectProject()
 		case key.Matches(msg, m.customKeyMap.Configure):
+			// TODO: FINISH VARIABLES FUNCTIONALITY
 			return m, tea.Sequence(m.SetLoading(), m.SelectProject(), m.showVariablesTable())
 		case key.Matches(msg, m.customKeyMap.Create):
 			m.selectedProject = &mod.Project{}
