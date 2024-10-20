@@ -15,6 +15,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
+	"github.com/common-nighthawk/go-figure"
 	"github.com/couchbase/gocb/v2"
 )
 
@@ -229,7 +230,7 @@ func createProjectForm(project *mod.Project, new bool) *huh.Form {
 
 	form := huh.NewForm(
 		huh.NewGroup(fields...),
-	).WithWidth(45).WithTheme(getBaseTheme())
+	).WithWidth(60).WithTheme(getBaseTheme())
 
 	return form
 }
@@ -430,7 +431,7 @@ func (m *model) deleteVariable(key string) tea.Cmd {
 
 // #region Init
 func (m *model) Init() tea.Cmd {
-	//TODO: INITIATE WITH A NICE MESSAGE/LOGO AND SET FULLSCREEN ? 
+	//TODO: INITIATE WITH A NICE MESSAGE/LOGO AND SET FULLSCREEN ?
 	return tea.Batch(m.spinner.Tick, tea.Sequence(m.GetApiHandler(), m.GetProjects()))
 }
 
@@ -668,37 +669,41 @@ func (m *model) updateConfirmForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // #region View
 func (m model) View() string {
+	venomTitle := figure.NewFigure("venom", "alligator", true).String()
+	s := lipgloss.NewStyle().Align(lipgloss.Center).
+		Foreground(purple).Render(venomTitle) + "\n"
+
 	switch m.state {
 	case ProjectsList:
-		s := baseStyle.Render(m.table.View()) + "\n"
+		s += baseStyle.Render(m.table.View()) + "\n"
 		s += "\n" + m.table.Help.View(m.customKeyMap)
 		return s
 
 	case EditProjectForm:
-		s := "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Editing Project: ")
+		s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Editing Project: ")
 		s += lipgloss.NewStyle().Foreground(white).Bold(true).Render(m.selectedProject.Name) + "\n"
 		s += baseStyle.Render(m.form.View()) + "\n"
 		return s
 	case CreateProjectForm:
-		s := "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Creating Project: ")
+		s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Creating Project: ")
 		s += lipgloss.NewStyle().Foreground(white).Bold(true).Render(m.selectedProject.Name) + "\n"
 		s += baseStyle.Render(m.form.View()) + "\n"
 		return s
 
 	case VariablesList:
-		s := baseStyle.Render(m.varTable.View()) + "\n"
+		s += baseStyle.Render(m.varTable.View()) + "\n"
 		s += "\n" + m.table.Help.View(m.customKeyMap)
 		return s
 	case CreateVariableForm:
-		s := "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Adding New Variable") + "\n"
+		s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Adding New Variable") + "\n"
 		s += baseStyle.Render(m.form.View()) + "\n"
 		return s
 
 	case Loading:
-		return fmt.Sprintf("\n %s%s\n\n", m.spinner.View(), lipgloss.NewStyle().Foreground(lipgloss.Color(white)).Bold(true).Render("Loading..."))
+		return s + fmt.Sprintf("\n %s%s\n\n", m.spinner.View(), lipgloss.NewStyle().Foreground(lipgloss.Color(white)).Bold(true).Render("Loading..."))
 
 	case Confirm:
-		s := baseStyle.Render(m.form.View()) + "\n"
+		s += baseStyle.Render(m.form.View()) + "\n"
 		return s
 	}
 
