@@ -8,6 +8,7 @@ import (
 
 	"github.com/KaiqueGovani/venom/internal/api"
 	"github.com/KaiqueGovani/venom/internal/db"
+	"github.com/KaiqueGovani/venom/internal/fs"
 	mod "github.com/KaiqueGovani/venom/internal/model"
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/spinner"
@@ -106,6 +107,7 @@ type model struct {
 	cluster         *gocb.Cluster
 	previousState   State
 	confirmCallback tea.Cmd
+	fs              fs.FileSystem
 }
 
 // #region KeyMap
@@ -119,6 +121,7 @@ type CustomKeyMap struct {
 	Quit      key.Binding
 	Help      key.Binding
 	Save      key.Binding
+	Pull      key.Binding
 }
 
 func (k CustomKeyMap) FullHelp() [][]key.Binding {
@@ -130,10 +133,14 @@ func (k CustomKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k CustomKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.LineUp, k.LineDown, k.Create, k.Edit, k.Configure, k.Delete, k.Quit}
+	return []key.Binding{k.LineUp, k.LineDown, k.Pull, k.Create, k.Edit, k.Configure, k.Delete, k.Quit}
 }
 
 var customKeyMap = CustomKeyMap{
+	Pull: key.NewBinding(
+		key.WithKeys("p"),
+		key.WithHelp("p", "\bull 💾"),
+	),
 	Edit: key.NewBinding(
 		key.WithKeys("e", "enter"),
 		key.WithHelp("e", "\bdit 📝"),
@@ -244,10 +251,28 @@ func (m *model) showVariablesTable() tea.Cmd {
 	// Disable the help for variable key
 	m.customKeyMap.Configure.SetEnabled(false)
 	m.customKeyMap.Edit.SetEnabled(false)
+	m.customKeyMap.Pull.SetEnabled(false)
 
 	m.updateVariablesTable()
 
 	return nil
+}
+
+func createVariablesTable() table.Model {
+	// Define the columns for the variables table
+	columns := []table.Column{
+		{Title: "Key", Width: 50},
+		{Title: "Value", Width: 50},
+	}
+
+	// Create the table
+	t := table.New(
+		table.WithColumns(columns),
+		table.WithFocused(true),
+		table.WithHeight(6),
+	)
+	styleTable(&t)
+	return t
 }
 
 func (m *model) updateVariablesTable() {
@@ -265,20 +290,8 @@ func (m *model) updateVariablesTable() {
 		variableRows = append(variableRows, table.Row{key, value})
 	}
 
-	// Define the columns for the variables table
-	columns := []table.Column{
-		{Title: "Key", Width: 50},
-		{Title: "Value", Width: 50},
-	}
-
-	// Create the table
-	m.varTable = table.New(
-		table.WithColumns(columns),
-		table.WithRows(variableRows),
-		table.WithFocused(true),
-		table.WithHeight(6),
-	)
-	styleTable(&m.varTable)
+	m.varTable.SetRows(variableRows)
+	m.varTable.GotoTop()
 }
 
 // #region VariableForm
@@ -322,7 +335,6 @@ type GoToProjectsList struct{}
 func (m *model) SetLoading() tea.Cmd {
 	return tea.Sequence(
 		func() tea.Msg {
-			m.previousState = m.state
 			m.state = Loading
 			return Message{}
 		}, m.spinner.Tick)
@@ -358,8 +370,6 @@ func (m *model) GetApiHandler() tea.Cmd {
 }
 
 // #region ProjectCommands
-type GetProjectsMsg struct{}
-
 func (m *model) GetProjects() tea.Cmd {
 	return func() tea.Msg {
 		// Get all projects
@@ -378,7 +388,6 @@ func (m *model) CreateProject() tea.Cmd {
 			panic(err)
 		}
 		m.projects[name] = *m.selectedProject
-		m.updateProjectsTable()
 		return GoToProjectsList{}
 	}
 }
@@ -390,7 +399,6 @@ func (m *model) UpdateProject() tea.Cmd {
 			panic(err)
 		}
 		m.projects[project.Name] = project
-		m.updateProjectsTable()
 		return GoToProjectsList{}
 	}
 }
@@ -402,15 +410,22 @@ func (m *model) DeleteProject() tea.Cmd {
 		if err != nil {
 			panic(err)
 		}
-
 		delete(m.projects, projectName)
-		m.updateProjectsTable()
-		m.state = ProjectsList
 		return GoToProjectsList{}
 	}
 }
 
 // #region VariablesCommands
+func (m *model) PullVariables() tea.Cmd {
+	return func() tea.Msg {
+		err := m.fs.SaveVariables([]mod.Project{*m.selectedProject})
+		if err != nil {
+			panic(err)
+		}
+		return GoToProjectsList{}
+	}
+}
+
 func (m *model) SaveVariables() tea.Cmd {
 	return func() tea.Msg {
 		_, err := m.apiHandler.UpdateProject(m.selectedProject.Name, *m.selectedProject)
@@ -431,7 +446,6 @@ func (m *model) deleteVariable(key string) tea.Cmd {
 
 // #region Init
 func (m *model) Init() tea.Cmd {
-	//TODO: INITIATE WITH A NICE MESSAGE/LOGO AND SET FULLSCREEN ?
 	return tea.Batch(m.spinner.Tick, tea.Sequence(m.GetApiHandler(), m.GetProjects()))
 }
 
@@ -442,6 +456,7 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.updateProjectsTable()
 		m.customKeyMap.Configure.SetEnabled(true)
 		m.customKeyMap.Edit.SetEnabled(true)
+		m.customKeyMap.Pull.SetEnabled(true)
 		return m, nil
 	}
 
@@ -486,23 +501,28 @@ func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
-		//TODO: ADD THE PULL COMMAND
 		case key.Matches(msg, m.customKeyMap.Quit):
 			return m, tea.Quit
-		case key.Matches(msg, m.customKeyMap.Edit):
+		case key.Matches(msg, m.customKeyMap.Pull):
 			if len(m.table.Rows()) == 0 {
 				return m, nil
 			}
 			*m.selectedProject = m.projects[m.table.SelectedRow()[0]]
-			m.state = CreateProjectForm
-			m.form = createProjectForm(m.selectedProject, true)
-			return m, m.form.Init()
+			return m, tea.Sequence(m.SetLoading(), m.PullVariables())
 		case key.Matches(msg, m.customKeyMap.Configure):
 			if len(m.table.Rows()) == 0 {
 				return m, nil
 			}
 			*m.selectedProject = m.projects[m.table.SelectedRow()[0]]
 			return m, m.showVariablesTable()
+		case key.Matches(msg, m.customKeyMap.Edit):
+			if len(m.table.Rows()) == 0 {
+				return m, nil
+			}
+			*m.selectedProject = m.projects[m.table.SelectedRow()[0]]
+			m.state = EditProjectForm
+			m.form = createProjectForm(m.selectedProject, false)
+			return m, m.form.Init()
 		case key.Matches(msg, m.customKeyMap.Create):
 			m.selectedProject = &mod.Project{}
 			m.state = CreateProjectForm
@@ -522,15 +542,6 @@ func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // #region UpdateProjectForm
 func (m *model) updateProjectForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.customKeyMap.Quit):
-			m.state = m.previousState
-			return m, nil
-		}
-	}
-
 	var cmds []tea.Cmd
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
@@ -540,8 +551,9 @@ func (m *model) updateProjectForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.form.State == huh.StateCompleted {
 		if !m.form.GetBool("confirm") {
-			m.state = m.previousState
-			return m, nil
+			return m, func() tea.Msg {
+				return GoToProjectsList{}
+			}
 		}
 
 		if m.state == CreateProjectForm {
@@ -625,6 +637,7 @@ func (m *model) updateCreateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selectedProject.Variables = make(map[string]string)
 			}
 			m.selectedProject.Variables[key] = value
+			m.projects[m.selectedProject.Name] = *m.selectedProject
 			return m, tea.Sequence(m.SetLoading(), m.SaveVariables())
 		}
 		m.state = VariablesList
@@ -636,15 +649,6 @@ func (m *model) updateCreateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // #region UpdateConfirmForm
 func (m *model) updateConfirmForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.customKeyMap.Quit):
-			m.state = m.previousState
-			return m, nil
-		}
-	}
-
 	var cmds []tea.Cmd
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
@@ -716,13 +720,17 @@ func main() {
 	// Starts the TUI application
 	t := createProjectsTable()
 
+	v := createVariablesTable()
+
 	spinner := spinner.New(
 		spinner.WithSpinner(spinner.Dot),
 		spinner.WithStyle(lipgloss.NewStyle().Foreground(lipgloss.Color("57"))),
 	)
 	spinner.Tick()
 
-	m := model{Loading, t, table.Model{}, customKeyMap, map[string]mod.Project{}, &mod.Project{}, nil, spinner, &api.ApiHandler{}, nil, ProjectsList, nil}
+	fs := fs.New()
+
+	m := model{Loading, t, v, customKeyMap, map[string]mod.Project{}, &mod.Project{}, nil, spinner, &api.ApiHandler{}, nil, ProjectsList, nil, fs}
 
 	if _, err := tea.NewProgram(&m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
