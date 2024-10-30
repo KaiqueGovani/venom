@@ -91,6 +91,7 @@ const (
 	Loading
 	Confirm
 	CreateVariableForm
+	EditVariableForm
 )
 
 // #region Model
@@ -98,6 +99,7 @@ type model struct {
 	state           State
 	table           table.Model
 	varTable        table.Model
+	oldKey          string
 	customKeyMap    CustomKeyMap
 	projects        map[string]mod.Project
 	selectedProject *mod.Project
@@ -250,7 +252,6 @@ func (m *model) showVariablesTable() tea.Cmd {
 
 	// Disable the help for variable key
 	m.customKeyMap.Configure.SetEnabled(false)
-	m.customKeyMap.Edit.SetEnabled(false)
 	m.customKeyMap.Pull.SetEnabled(false)
 
 	m.updateVariablesTable()
@@ -295,8 +296,7 @@ func (m *model) updateVariablesTable() {
 }
 
 // #region VariableForm
-func createVariableForm() *huh.Form {
-	var key, value string
+func createVariableForm(key, value string) *huh.Form {
 	form := huh.NewForm(
 		huh.NewGroup(
 			huh.NewInput().Key("key").Title("Variable Key").Value(&key),
@@ -455,7 +455,6 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.state = ProjectsList
 		m.updateProjectsTable()
 		m.customKeyMap.Configure.SetEnabled(true)
-		m.customKeyMap.Edit.SetEnabled(true)
 		m.customKeyMap.Pull.SetEnabled(true)
 		return m, nil
 	}
@@ -467,8 +466,8 @@ func (m *model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateProjectForm(msg)
 	case VariablesList:
 		return m.updateVariablesList(msg)
-	case CreateVariableForm:
-		return m.updateCreateVariableForm(msg)
+	case CreateVariableForm, EditVariableForm:
+		return m.updateVariableForm(msg)
 	case Loading:
 		return m.updateLoading(msg)
 	case Confirm:
@@ -583,15 +582,25 @@ func (m *model) updateVariablesList(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch {
 		case key.Matches(msg, m.customKeyMap.Quit):
 			m.customKeyMap.Configure.SetEnabled(true)
-			m.customKeyMap.Edit.SetEnabled(true)
 			return m, func() tea.Msg {
 				return GoToProjectsList{}
 			}
 		case key.Matches(msg, m.customKeyMap.Create):
 			// Change this to show the new variable form
 			m.state = CreateVariableForm
-			m.form = createVariableForm()
+			m.form = createVariableForm("", "")
 			return m, m.form.Init()
+		case key.Matches(msg, m.customKeyMap.Edit):
+			// Like create, but set the form values
+			if len(m.varTable.Rows()) == 0 {
+				return m, nil
+			}
+			selectedRow := m.varTable.SelectedRow()
+			m.state = EditVariableForm
+			m.oldKey = selectedRow[0]
+			m.form = createVariableForm(selectedRow[0], selectedRow[1])
+			return m, m.form.Init()
+
 		case key.Matches(msg, m.customKeyMap.Delete):
 			if len(m.varTable.Rows()) == 0 {
 				return m, nil
@@ -612,16 +621,7 @@ func (m *model) updateVariablesList(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 // #region UpdateCreateVariable
 // Add this new function to handle the CreateVariableForm state
-func (m *model) updateCreateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch {
-		case key.Matches(msg, m.customKeyMap.Quit):
-			m.state = VariablesList
-			return m, nil
-		}
-	}
-
+func (m *model) updateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	form, cmd := m.form.Update(msg)
 	if f, ok := form.(*huh.Form); ok {
@@ -636,7 +636,17 @@ func (m *model) updateCreateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.selectedProject.Variables == nil {
 				m.selectedProject.Variables = make(map[string]string)
 			}
-			m.selectedProject.Variables[key] = value
+
+			if m.state == CreateVariableForm {
+				m.selectedProject.Variables[key] = value
+			}
+
+			if m.state == EditVariableForm {
+				m.selectedProject.Variables[key] = value
+				delete(m.selectedProject.Variables, m.oldKey)
+				m.oldKey = ""
+			}
+
 			m.projects[m.selectedProject.Name] = *m.selectedProject
 			return m, tea.Sequence(m.SetLoading(), m.SaveVariables())
 		}
@@ -702,6 +712,11 @@ func (m model) View() string {
 		s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Adding New Variable") + "\n"
 		s += baseStyle.Render(m.form.View()) + "\n"
 		return s
+	case EditVariableForm:
+		s += "\n" + lipgloss.NewStyle().Bold(true).Foreground(purple).Render("Editing Variable: ") + "\n"
+		s += lipgloss.NewStyle().Foreground(white).Bold(true).Render(m.oldKey) + "\n"
+		s += baseStyle.Render(m.form.View()) + "\n"
+		return s
 
 	case Loading:
 		return s + fmt.Sprintf("\n %s%s\n\n", m.spinner.View(), lipgloss.NewStyle().Foreground(lipgloss.Color(white)).Bold(true).Render("Loading..."))
@@ -730,7 +745,7 @@ func main() {
 
 	fs := fs.New()
 
-	m := model{Loading, t, v, customKeyMap, map[string]mod.Project{}, &mod.Project{}, nil, spinner, &api.ApiHandler{}, nil, ProjectsList, nil, fs}
+	m := model{Loading, t, v, "", customKeyMap, map[string]mod.Project{}, &mod.Project{}, nil, spinner, &api.ApiHandler{}, nil, ProjectsList, nil, fs}
 
 	if _, err := tea.NewProgram(&m).Run(); err != nil {
 		fmt.Println("Error running program:", err)
@@ -741,5 +756,10 @@ func main() {
 		m.cluster.Close(&gocb.ClusterCloseOptions{})
 	}
 
-	println("Venom says: 'Goodbye, and remember, with great power comes great responsibility!'")
+	println(lipgloss.NewStyle().Align(lipgloss.Center).
+		Foreground(purple).
+		Bold(true).
+		Italic(true).
+		Underline(true).
+		Render("~ WE ARE VENOM ~"))
 }
