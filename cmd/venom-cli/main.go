@@ -34,6 +34,7 @@ func main() {
 
 	if len(os.Args) < 2 {
 		helpCmd()
+		return
 	}
 
 	mainCmd := os.Args[1]
