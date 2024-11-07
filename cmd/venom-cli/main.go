@@ -202,16 +202,36 @@ func handleError(err error) {
 
 // pullCmd retrieves project variables and saves them to the file system.
 func pullCmd() {
-	projects, err := a.GetProjects()
-	handleError(err)
+	pullSet := flag.NewFlagSet("pull", flag.ExitOnError)
+	projectName := pullSet.String("name", "", "Specify project name to pull")
 
-	fs := fs.New()
-	projectValues := convertProjectsToSlice(projects)
+	if err := pullSet.Parse(os.Args[2:]); err != nil {
+			log.Fatal(err)
+	}
 
-	err = fs.SaveVariables(projectValues)
-	handleError(err)
+	if *projectName != "" {
+			// Pull only the specified project
+			project, err := a.GetProject(*projectName)
+			handleError(err)
 
-	log.Println("Projects saved successfully.")
+			fs := fs.New()
+			err = fs.SaveVariables([]model.Project{project})
+			handleError(err)
+
+			log.Printf("Project %s saved successfully.\n", project.Name)
+	} else {
+			// Pull all projects
+			projects, err := a.GetProjects()
+			handleError(err)
+
+			fs := fs.New()
+			projectValues := convertProjectsToSlice(projects)
+
+			err = fs.SaveVariables(projectValues)
+			handleError(err)
+
+			log.Println("All projects saved successfully.")
+	}
 }
 
 // helpCmd lists all available commands with brief descriptions.
@@ -227,11 +247,13 @@ func helpCmd() {
 	fmt.Println("    --target         - Set the target folder for the project.")
 	fmt.Println()
 	fmt.Println("  pull       - Retrieve project variables and save them to the file system.")
+	fmt.Println("    --name           - (Optional) Specify the project to pull. If omitted, pulls all projects.")
+	fmt.Println()
 	fmt.Println("  help       - List all available commands with brief descriptions.")
 	fmt.Println()
 	fmt.Println("Example usage:")
 	fmt.Println("  venom configure --add --name MyProject")
-	fmt.Println("  venom pull")
+	fmt.Println("  venom pull --name MyProject")
 }
 
 // convertProjectsToSlice converts the map of projects to a slice.
