@@ -33,7 +33,7 @@ func main() {
 	a = api.NewApiHandler(bucketName, scopeName, collectionName, cluster, getCollection(cluster))
 
 	if len(os.Args) < 2 {
-		log.Fatal("Comando insuficiente, por favor, use um comando após 'venom'.")
+		helpCmd()
 	}
 
 	mainCmd := os.Args[1]
@@ -42,12 +42,14 @@ func main() {
 		configureCmd()
 	case "pull":
 		pullCmd()
+	case "help":
+		helpCmd()
 	default:
-		log.Fatalf("Comando '%s' não reconhecido.\n", mainCmd)
+		log.Fatalf("Command '%s' not recognized.\n", mainCmd)
 	}
 }
 
-// initializeDatabase configura a conexão com o banco de dados e retorna o cluster.
+// initializeDatabase sets up the database connection and returns the cluster.
 func initializeDatabase() (*gocb.Cluster, error) {
 	cluster, err := db.Connect()
 	if err != nil {
@@ -56,14 +58,14 @@ func initializeDatabase() (*gocb.Cluster, error) {
 	return cluster, nil
 }
 
-// getCollection obtém a coleção do bucket especificado.
+// getCollection retrieves the collection from the specified bucket.
 func getCollection(cluster *gocb.Cluster) *gocb.Collection {
 	bucket := cluster.Bucket(bucketName)
 	bucket.WaitUntilReady(5*time.Second, nil)
 	return bucket.Scope(scopeName).Collection(collectionName)
 }
 
-// configureCmd gerencia os comandos de configuração.
+// configureCmd handles the configuration commands.
 func configureCmd() {
 	configureSet := flag.NewFlagSet("configure", flag.ExitOnError)
 	defineFlags(configureSet)
@@ -75,18 +77,18 @@ func configureCmd() {
 	executeConfigureCommand(configureSet)
 }
 
-// defineFlags define as flags usadas no comando configure.
+// defineFlags defines the flags used in the configure command.
 func defineFlags(set *flag.FlagSet) {
-	set.Bool("list", false, "Listar configurações")
-	set.Bool("add", false, "Adicionar configuração")
-	set.String("name", "", "Nome do projeto para adicionar")
-	set.String("set", "", "Configurar KEY=VALUE")
-	set.String("unset", "", "Remover chave especificada")
-	set.String("filename", "", "Nome do arquivo")
-	set.String("target", "", "Caminho de destino")
+	set.Bool("list", false, "List configurations")
+	set.Bool("add", false, "Add a new configuration")
+	set.String("name", "", "Name of the project to add or modify")
+	set.String("set", "", "Set a variable in the format KEY=VALUE")
+	set.String("unset", "", "Remove a specified key")
+	set.String("filename", "", "Filename associated with the project")
+	set.String("target", "", "Target folder path")
 }
 
-// executeConfigureCommand executa a lógica do comando de configuração baseado nas flags.
+// executeConfigureCommand executes the logic for the configure command based on the flags.
 func executeConfigureCommand(set *flag.FlagSet) {
 	name := set.Lookup("name").Value.String()
 	if set.Lookup("list").Value.String() == "true" {
@@ -100,25 +102,25 @@ func executeConfigureCommand(set *flag.FlagSet) {
 	} else if set.Lookup("filename").Value.String() != "" && set.Lookup("target").Value.String() != "" {
 		editProject(name, set.Lookup("filename").Value.String(), set.Lookup("target").Value.String())
 	} else {
-		fmt.Println("Nenhum comando válido foi passado para 'configure'.")
+		fmt.Println("No valid command provided for 'configure'.")
 	}
 }
 
-// listProjects lista todos os projetos.
+// listProjects lists all projects.
 func listProjects() {
 	projects, err := a.GetProjects()
 	handleError(err)
 
-	fmt.Print("\nProjetos:\n\n")
+	fmt.Print("\nProjects:\n\n")
     
 	for _, project := range projects {
-		fmt.Printf("Nome do Projeto: %s\n", project.Name)
-		fmt.Printf("  Arquivo: %s\n", project.FileName)
-		fmt.Printf("  Pasta de Destino: %s\n", project.TargetFolder)
-		fmt.Printf("  Variáveis (%d):\n", len(project.Variables))
+		fmt.Printf("Project Name: %s\n", project.Name)
+		fmt.Printf("  File: %s\n", project.FileName)
+		fmt.Printf("  Target Folder: %s\n", project.TargetFolder)
+		fmt.Printf("  Variables (%d):\n", len(project.Variables))
 
 		for key, value := range project.Variables {
-			// Para não expor dados sensíveis, você pode substituir por um placeholder
+			// Mask sensitive data with a placeholder
 			if strings.Contains(key, "SECRET") || strings.Contains(key, "KEY") {
 				value = "*****"
 			}
@@ -128,7 +130,7 @@ func listProjects() {
 	}
 }
 
-// addProject adiciona um novo projeto.
+// addProject adds a new project.
 func addProject(name string) {
 	newProject := model.Project{
 		Name:         name,
@@ -140,43 +142,43 @@ func addProject(name string) {
 	_, err := a.CreateProject(newProject)
 	handleError(err)
 
-	fmt.Printf("Adicionando projeto com o nome: %s\n", name)
+	fmt.Printf("Added project with name: %s\n", name)
 }
 
-// setProjectVariable configura uma variável para um projeto.
+// setProjectVariable sets a variable for a project.
 func setProjectVariable(name, set string) {
 	project, err := a.GetProject(name)
 	handleError(err)
 
 	key, value, found := strings.Cut(set, "=")
 	if !found {
-		log.Fatalf("invalid set format: %s", set)
+		log.Fatalf("Invalid set format: %s", set)
 	}
 
 	project.Variables[key] = value
 	_, err = a.UpdateProject(name, project)
 	handleError(err)
 
-	fmt.Printf("Configurando %s = %s para o projeto %s\n", key, value, project.Name)
+	fmt.Printf("Set %s = %s for project %s\n", key, value, project.Name)
 }
 
-// unsetProjectVariable remove uma variável de um projeto.
+// unsetProjectVariable removes a variable from a project.
 func unsetProjectVariable(name, unset string) {
 	project, err := a.GetProject(name)
 	handleError(err)
 
 	if _, ok := project.Variables[unset]; !ok {
-		log.Fatalf("chave %s nao encontrada no projeto %s", unset, project.Name)
-	}
+		log.Fatalf("Key %s not found in project %s", unset, project.Name)
+	} 
 
 	delete(project.Variables, unset)
 	_, err = a.UpdateProject(name, project)
 	handleError(err)
 
-	fmt.Printf("Removendo chave %s do projeto %s\n", unset, project.Name)
+	fmt.Printf("Removed key %s from project %s\n", unset, project.Name)
 }
 
-// editProject edita as informações de um projeto.
+// editProject edits the project details.
 func editProject(name, filename, target string) {
 	project, err := a.GetProject(name)
 	handleError(err)
@@ -187,17 +189,17 @@ func editProject(name, filename, target string) {
 	_, err = a.UpdateProject(name, project)
 	handleError(err)
 
-	fmt.Printf("Editando projeto %s com novo arquivo: %s e destino: %s\n", project.Name, filename, target)
+	fmt.Printf("Updated project %s with new file: %s and target: %s\n", project.Name, filename, target)
 }
 
-// handleError verifica erros e faz log apropriado.
+// handleError checks for errors and logs appropriately.
 func handleError(err error) {
 	if err != nil {
 		log.Fatal(err)
 	}
 }
 
-// pullCmd recupera variáveis de projetos e as salva no sistema de arquivos.
+// pullCmd retrieves project variables and saves them to the file system.
 func pullCmd() {
 	projects, err := a.GetProjects()
 	handleError(err)
@@ -208,10 +210,30 @@ func pullCmd() {
 	err = fs.SaveVariables(projectValues)
 	handleError(err)
 
-	log.Println("Projetos salvos com sucesso.")
+	log.Println("Projects saved successfully.")
 }
 
-// convertProjectsToSlice converte o mapa de projetos para um slice.
+// helpCmd lists all available commands with brief descriptions.
+func helpCmd() {
+	fmt.Println("\nAvailable commands:\n")
+	fmt.Println("  configure  - Manage project configurations. Subcommands:")
+	fmt.Println("    --list           - List all project configurations.")
+	fmt.Println("    --add            - Add a new project. Requires --name.")
+	fmt.Println("    --name           - Specify project name for adding or editing.")
+	fmt.Println("    --set KEY=VALUE  - Set a variable for the specified project.")
+	fmt.Println("    --unset KEY      - Remove a variable from the specified project.")
+	fmt.Println("    --filename       - Set the filename associated with the project.")
+	fmt.Println("    --target         - Set the target folder for the project.")
+	fmt.Println()
+	fmt.Println("  pull       - Retrieve project variables and save them to the file system.")
+	fmt.Println("  help       - List all available commands with brief descriptions.")
+	fmt.Println()
+	fmt.Println("Example usage:")
+	fmt.Println("  venom configure --add --name MyProject")
+	fmt.Println("  venom pull")
+}
+
+// convertProjectsToSlice converts the map of projects to a slice.
 func convertProjectsToSlice(projects map[string]model.Project) []model.Project {
 	var projectValues []model.Project
 	for _, project := range projects {
