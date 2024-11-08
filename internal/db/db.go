@@ -7,7 +7,6 @@ import (
 	"github.com/joho/godotenv"
 )
 
-
 func Connect() (*gocb.Cluster, error) {
 	// Update this to your cluster details
 
