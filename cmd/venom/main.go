@@ -24,16 +24,6 @@ const (
 
 var a *api.ApiHandler
 
-func initializeCluster() {
-	cluster, err := initializeDatabase()
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer cluster.Close(&gocb.ClusterCloseOptions{})
-
-	a = api.NewApiHandler(bucketName, scopeName, collectionName, cluster, getCollection(cluster))
-}
-
 // #region CLI
 func main() {
 	if len(os.Args) < 2 {
@@ -46,10 +36,22 @@ func main() {
 	case "app":
 		app.RunApp()
 	case "configure":
-		initializeCluster()
+		cluster, err := initializeDatabase()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer cluster.Close(&gocb.ClusterCloseOptions{})
+
+		a = api.NewApiHandler(bucketName, scopeName, collectionName, cluster, getCollection(cluster))
 		configureCmd()
 	case "pull":
-		initializeCluster()
+		cluster, err := initializeDatabase()
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer cluster.Close(&gocb.ClusterCloseOptions{})
+
+		a = api.NewApiHandler(bucketName, scopeName, collectionName, cluster, getCollection(cluster))
 		pullCmd()
 	case "help":
 		helpCmd()
