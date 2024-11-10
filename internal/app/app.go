@@ -333,11 +333,8 @@ type Message struct{}
 type GoToProjectsList struct{}
 
 func (m *model) SetLoading() tea.Cmd {
-	return tea.Sequence(
-		func() tea.Msg {
-			m.state = Loading
-			return Message{}
-		}, m.spinner.Tick)
+	m.state = Loading
+	return m.spinner.Tick
 }
 
 func (m *model) showConfirmForm(callback tea.Cmd, message ...string) tea.Cmd {
