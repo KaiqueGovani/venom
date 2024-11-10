@@ -141,23 +141,23 @@ func (k CustomKeyMap) ShortHelp() []key.Binding {
 var customKeyMap = CustomKeyMap{
 	Pull: key.NewBinding(
 		key.WithKeys("p"),
-		key.WithHelp("p", "\bull 💾"),
+		key.WithHelp("💾 p", "\bull"),
 	),
 	Edit: key.NewBinding(
 		key.WithKeys("e", "enter"),
-		key.WithHelp("e", "\bdit 📝"),
+		key.WithHelp("📝 e", "\bdit"),
 	),
 	Configure: key.NewBinding(
 		key.WithKeys("v"),
-		key.WithHelp("v", "\bariables 🧩"),
+		key.WithHelp("🧩 v", "\b\bariables"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
-		key.WithHelp("d", "\belete ❌"),
+		key.WithHelp("❌ d", "\belete"),
 	),
 	Create: key.NewBinding(
 		key.WithKeys("a"),
-		key.WithHelp("a", "\bdd ➕"),
+		key.WithHelp("➕ a", "\bdd"),
 	),
 	LineUp: key.NewBinding(
 		key.WithKeys("up", "k"),
@@ -169,7 +169,7 @@ var customKeyMap = CustomKeyMap{
 	),
 	Quit: key.NewBinding(
 		key.WithKeys("q", "ctrl+c"),
-		key.WithHelp("q", "\buit 🚪"),
+		key.WithHelp("🚪 q", "\buit"),
 	),
 	Help: key.NewBinding(
 		key.WithKeys("?"),
@@ -177,7 +177,7 @@ var customKeyMap = CustomKeyMap{
 	),
 	Save: key.NewBinding(
 		key.WithKeys("s"),
-		key.WithHelp("s", "\bave ✅"),
+		key.WithHelp("✅ s", "\bave"),
 	),
 }
 
