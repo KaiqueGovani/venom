@@ -149,7 +149,7 @@ var customKeyMap = CustomKeyMap{
 	),
 	Configure: key.NewBinding(
 		key.WithKeys("v"),
-		key.WithHelp("🧩 v", "\b\bariables"),
+		key.WithHelp("🧩 v", "\bariables"),
 	),
 	Delete: key.NewBinding(
 		key.WithKeys("d"),
@@ -337,8 +337,8 @@ func (m *model) SetLoading() tea.Cmd {
 	return m.spinner.Tick
 }
 
-func (m *model) showConfirmForm(callback tea.Cmd, message ...string) tea.Cmd {
-	m.previousState = m.state
+func (m *model) showConfirmForm(callback tea.Cmd, previousState State, message ...string) tea.Cmd {
+	m.previousState = previousState
 	m.state = Confirm
 	m.confirmCallback = callback
 	m.form = createConfirmForm(message...)
@@ -402,7 +402,7 @@ func (m *model) UpdateProject() tea.Cmd {
 
 func (m *model) DeleteProject() tea.Cmd {
 	return func() tea.Msg {
-		projectName := m.table.SelectedRow()[0]
+		projectName := m.selectedProject.Name
 		err := m.apiHandler.DeleteProject(projectName)
 		if err != nil {
 			panic(err)
@@ -437,8 +437,10 @@ func (m *model) SaveVariables() tea.Cmd {
 
 // Add this new function to handle variable deletion
 func (m *model) deleteVariable(key string) tea.Cmd {
-	delete(m.selectedProject.Variables, key)
-	return tea.Sequence(m.SetLoading(), m.SaveVariables())
+	return tea.Sequence(m.SetLoading(), func() tea.Msg {
+		delete(m.selectedProject.Variables, key)
+		return Message{}
+	}, m.SaveVariables())
 }
 
 // #region Init
@@ -495,8 +497,6 @@ func (m *model) updateLoading(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
-	m.table, cmd = m.table.Update(msg)
-
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch {
@@ -531,9 +531,12 @@ func (m *model) updateProjectsList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if len(m.table.Rows()) == 0 {
 				return m, nil
 			}
-			return m, m.showConfirmForm(tea.Sequence(m.SetLoading(), m.DeleteProject()), "Are you sure you want to delete ", fmt.Sprintf("Project '%s'", m.table.SelectedRow()[0]))
+			*m.selectedProject = m.projects[m.table.SelectedRow()[0]]
+			return m, m.showConfirmForm(tea.Sequence(m.SetLoading(), m.DeleteProject()), ProjectsList, "Are you sure you want to delete ", fmt.Sprintf("Project '%s'", m.selectedProject.Name))
 		}
 	}
+
+	m.table, cmd = m.table.Update(msg)
 
 	return m, cmd
 }
@@ -608,6 +611,7 @@ func (m *model) updateVariablesList(msg tea.Msg) (tea.Model, tea.Cmd) {
 			selectedRow := m.varTable.SelectedRow()
 			return m, m.showConfirmForm(
 				m.deleteVariable(selectedRow[0]),
+				VariablesList,
 				"Are you sure you want to delete",
 				fmt.Sprintf("Variable: %s", selectedRow[0]),
 			)
