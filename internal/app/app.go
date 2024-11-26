@@ -646,7 +646,9 @@ func (m *model) updateVariableForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if m.state == EditVariableForm {
 				m.selectedProject.Variables[key] = value
-				delete(m.selectedProject.Variables, m.oldKey)
+				if (m.oldKey != key){ 
+					delete(m.selectedProject.Variables, m.oldKey)
+				}
 				m.oldKey = ""
 			}
 
