@@ -2,6 +2,14 @@
 
 Venom is a lightweight tool that helps you manage environment variables across different projects using a NoSQL database. It comes with a TUI (Text User Interface) built with [Bubble Tea](https://github.com/charmbracelet/bubbletea) to make configuration quick and intuitive.
 
+---
+
+## TUI Demonstration
+
+*![Space for TUI demo GIF](venom-tui.gif)*
+
+---
+
 ## Features
 
 - **NoSQL Backing**: Stores configuration in a Couchbase bucket for easy retrieval.  
@@ -38,6 +46,14 @@ Venom is a lightweight tool that helps you manage environment variables across d
    ```
 
 4. Ensure your `$GOPATH/bin` is in your PATH, or run Venom directly from the build output.
+
+---
+
+## CLI Demonstration
+
+*![Space for CLI demo GIF](venom-cli.gif)*
+
+---
 
 ## Usage
 
@@ -88,9 +104,13 @@ Venom uses a set of subcommands to manage your environment variables:
    venom app
    ```
 
+---
+
 ## File System Sync
 
 When you run `venom pull`, Venom writes your environment variables to the file you defined (`project.FileName`) in your chosen target folder (`project.TargetFolder`). If the file already exists, Venom warns you and overwrites the file.
+
+---
 
 ## Contributing
 
